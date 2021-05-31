@@ -67,7 +67,7 @@ type Server struct {
 
 func NewServer(config *Config) *Server {
 	server := &Server{
-		config:config,
+		config: config,
 	}
 	return server
 }
@@ -113,7 +113,6 @@ func (self *Server) ListenAndServe() (err error) {
 	if Debug {
 		fmt.Println("rtmp: server: listening on", addr)
 	}
-
 
 	for {
 		var netconn net.Conn
@@ -953,6 +952,15 @@ func (self *Conn) writeAck(seqnum uint32) (err error) {
 	pio.PutU32BE(b[n:], seqnum)
 	n += 4
 	_, err = self.bufw.Write(b[:n])
+
+	if err != nil {
+		return
+	}
+
+	// Do immediately flush after writing an ACK. Since there is almost no
+	// traffic this way these packets can stay in the buffer for a very long time.
+	err = self.bufw.Flush()
+
 	return
 }
 
@@ -1324,6 +1332,7 @@ func (self *Conn) readChunk() (err error) {
 
 	self.ackn += uint32(n)
 	if self.readAckSize != 0 && self.ackn > self.readAckSize {
+		fmt.Println("Writing ACK")
 		if err = self.writeAck(self.ackn); err != nil {
 			return
 		}
@@ -1453,6 +1462,18 @@ func (self *Conn) handleMsg(timestamp uint32, msgsid uint32, msgtypeid uint8, ms
 			return
 		}
 		self.readMaxChunkSize = int(pio.U32BE(msgdata))
+		return
+	case msgtypeidWindowAckSize:
+		fmt.Println("Window ACK size received")
+		if len(msgdata) < 4 {
+			err = fmt.Errorf("rtmp: short packet of WindowAckSize")
+			return
+		}
+
+		// Do what FFMPEG does which is to send ACKs on half the window size.
+		// This makes sure the peer is never blocked for sending.
+		self.readAckSize = pio.U32BE(msgdata) / 2
+		fmt.Printf("Set window ACK size to half of received value: %d\n", self.readAckSize)
 		return
 	}
 
