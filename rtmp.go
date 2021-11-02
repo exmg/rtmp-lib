@@ -1114,6 +1114,11 @@ func (self *Conn) fillChunkHeader(b []byte, csid uint32, timestamp int32, msgtyp
 	return
 }
 
+func (self *Conn) FlushWrite() (err error) {
+	err = self.flushWrite()
+	return
+}
+
 func (self *Conn) flushWrite() (err error) {
 	if err = self.bufw.Flush(); err != nil {
 		return
