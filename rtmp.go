@@ -159,6 +159,7 @@ type Conn struct {
 	bufr *bufio.Reader
 	bufw *bufio.Writer
 	ackn uint32
+	ackt time.Time
 
 	writebuf []byte
 	readbuf  []byte
@@ -225,6 +226,9 @@ func NewConn(netconn net.Conn, buffersize int) *Conn {
 	conn.txrxcount = &txrxcount{ReadWriter: netconn}
 	conn.writebuf = make([]byte, 4096)
 	conn.readbuf = make([]byte, 4096)
+	conn.ackt = time.Now()
+	fmt.Printf("----- set ack timer\n")
+
 	return conn
 }
 
@@ -657,7 +661,9 @@ func (self *Conn) writeConnect(path string) (err error) {
 		} else {
 			if self.msgtypeid == msgtypeidWindowAckSize {
 				if len(self.msgdata) == 4 {
-					self.readAckSize = pio.U32BE(self.msgdata)
+					rAS := pio.U32BE(self.msgdata)
+					fmt.Printf("rtmp: received new WindowAckSize: %d\n", rAS)
+					self.readAckSize = rAS
 				}
 				if err = self.writeWindowAckSize(0xffffffff); err != nil {
 					return
@@ -960,6 +966,8 @@ func (self *Conn) writeAck(seqnum uint32) (err error) {
 	// Do immediately flush after writing an ACK. Since there is almost no
 	// traffic this way these packets can stay in the buffer for a very long time.
 	err = self.bufw.Flush()
+
+	self.ackt = time.Now()
 
 	return
 }
@@ -1336,8 +1344,21 @@ func (self *Conn) readChunk() (err error) {
 	}
 
 	self.ackn += uint32(n)
+
+	shouldAck := false
+	ackReason := ""
 	if self.readAckSize != 0 && self.ackn > self.readAckSize {
-		fmt.Println("Writing ACK")
+		shouldAck = true
+		ackReason += "bytes read"
+	}
+
+	if time.Since(self.ackt) > 5*time.Second {
+		shouldAck = true
+		ackReason += "timer expired"
+	}
+
+	if shouldAck {
+		fmt.Printf("Writing ACK because: %s, bytes: %d, self.readAckSize: %d, conn: %s\n", ackReason, self.ackn, self.readAckSize, self.netconn.RemoteAddr().String())
 		if err = self.writeAck(self.ackn); err != nil {
 			return
 		}
@@ -1478,7 +1499,7 @@ func (self *Conn) handleMsg(timestamp uint32, msgsid uint32, msgtypeid uint8, ms
 		// Do what FFMPEG does which is to send ACKs on half the window size.
 		// This makes sure the peer is never blocked for sending.
 		self.readAckSize = pio.U32BE(msgdata) / 2
-		fmt.Printf("Set window ACK size to half of received value: %d\n", self.readAckSize)
+		fmt.Printf("Set window ACK size to half of received value: %d, conn: %s\n", self.readAckSize, self.netconn.RemoteAddr().String())
 		return
 	}
 
