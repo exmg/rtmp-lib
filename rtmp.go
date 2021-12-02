@@ -318,9 +318,26 @@ func (self *Conn) pollMsg() (err error) {
 		if err = self.readChunk(); err != nil {
 			return
 		}
+
 		if self.gotmsg {
+			self.logSpecialCommands()
+
 			return
 		}
+	}
+}
+
+func (self *Conn) logSpecialCommands() {
+	if !self.gotmsg {
+		return
+	}
+
+	if !self.gotcommand {
+		return
+	}
+
+	if self.commandname == "deleteStream" || self.commandname == "FCUnpublish" {
+		fmt.Printf("Received special command: %s\n", self.commandname)
 	}
 }
 
@@ -550,7 +567,6 @@ func (self *Conn) readConnect() (err error) {
 				self.stage++
 				return
 			}
-
 		}
 	}
 
