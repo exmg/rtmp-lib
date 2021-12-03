@@ -149,6 +149,7 @@ const (
 type Conn struct {
 	URL             *url.URL
 	OnPlayOrPublish func(string, flv.AMFMap) error
+	OnLogLine       func(string) //Triggered whenever an important event happens
 
 	prober  *flv.Prober
 	streams []av.CodecData
@@ -328,6 +329,10 @@ func (self *Conn) pollMsg() (err error) {
 }
 
 func (self *Conn) logSpecialCommands() {
+	if self.OnLogLine == nil {
+		return
+	}
+
 	if !self.gotmsg {
 		return
 	}
@@ -337,7 +342,7 @@ func (self *Conn) logSpecialCommands() {
 	}
 
 	if self.commandname == "deleteStream" || self.commandname == "FCUnpublish" {
-		fmt.Printf("Received special command: %s\n", self.commandname)
+		self.OnLogLine(fmt.Sprintf("Received special command: %s", self.commandname))
 	}
 }
 
