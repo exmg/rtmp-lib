@@ -228,7 +228,6 @@ func NewConn(netconn net.Conn, buffersize int) *Conn {
 	conn.writebuf = make([]byte, 4096)
 	conn.readbuf = make([]byte, 4096)
 	conn.ackt = time.Now()
-	fmt.Printf("----- set ack timer\n")
 
 	return conn
 }
@@ -329,9 +328,6 @@ func (self *Conn) pollMsg() (err error) {
 }
 
 func (self *Conn) logSpecialCommands() {
-	if self.OnLogLine == nil {
-		return
-	}
 
 	if !self.gotmsg {
 		return
@@ -342,8 +338,17 @@ func (self *Conn) logSpecialCommands() {
 	}
 
 	if self.commandname == "deleteStream" || self.commandname == "FCUnpublish" {
-		self.OnLogLine(fmt.Sprintf("Received special command: %s", self.commandname))
+		self.logToExtern(fmt.Sprintf("Received special command: %s", self.commandname))
 	}
+}
+
+//log to the external logger via OnLogLine (if one is attached)
+func (self *Conn) logToExtern(msg string) {
+	if self.OnLogLine == nil {
+		return
+	}
+
+	self.OnLogLine(msg)
 }
 
 func SplitPath(u *url.URL) (app, stream string) {
@@ -1511,7 +1516,6 @@ func (self *Conn) handleMsg(timestamp uint32, msgsid uint32, msgtypeid uint8, ms
 		self.readMaxChunkSize = int(pio.U32BE(msgdata))
 		return
 	case msgtypeidWindowAckSize:
-		fmt.Println("Window ACK size received")
 		if len(msgdata) < 4 {
 			err = fmt.Errorf("rtmp: short packet of WindowAckSize")
 			return
@@ -1520,7 +1524,7 @@ func (self *Conn) handleMsg(timestamp uint32, msgsid uint32, msgtypeid uint8, ms
 		// Do what FFMPEG does which is to send ACKs on half the window size.
 		// This makes sure the peer is never blocked for sending.
 		self.readAckSize = pio.U32BE(msgdata) / 2
-		fmt.Printf("Set window ACK size to half of received value: %d, conn: %s\n", self.readAckSize, self.netconn.RemoteAddr().String())
+		self.logToExtern(fmt.Sprintf("Set window ACK size to half of received value: %d, conn: %s", self.readAckSize, self.netconn.RemoteAddr().String()))
 		return
 	}
 
