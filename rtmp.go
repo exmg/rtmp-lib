@@ -1384,7 +1384,7 @@ func (self *Conn) readChunk() (err error) {
 	}
 
 	if shouldAck {
-		fmt.Printf("Writing ACK because: %s, bytes: %d, self.readAckSize: %d, conn: %s\n", ackReason, self.ackn, self.readAckSize, self.netconn.RemoteAddr().String())
+		self.logToExtern(fmt.Sprintf("Writing ACK because: %s, bytes: %d, self.readAckSize: %d, conn: %s", ackReason, self.ackn, self.readAckSize, self.netconn.RemoteAddr().String()))
 		if err = self.writeAck(self.ackn); err != nil {
 			return
 		}
