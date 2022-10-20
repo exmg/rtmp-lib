@@ -975,6 +975,7 @@ func (self *Conn) writeSetChunkSize(size int) (err error) {
 	pio.PutU32BE(b[n:], uint32(size))
 	n += 4
 	_, err = self.bufw.Write(b[:n])
+	self.logToExtern(fmt.Sprintf("writeSetChunkSize size: %d", size))
 	return
 }
 
@@ -1514,6 +1515,7 @@ func (self *Conn) handleMsg(timestamp uint32, msgsid uint32, msgtypeid uint8, ms
 			return
 		}
 		self.readMaxChunkSize = int(pio.U32BE(msgdata))
+		self.logToExtern(fmt.Sprintf("set readMaxChunkSize to: %d", self.readMaxChunkSize))
 		return
 	case msgtypeidWindowAckSize:
 		if len(msgdata) < 4 {
